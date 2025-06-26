@@ -223,7 +223,7 @@
         let gameConfig = null;
         let balls = [];
         let currentBonuses = {};
-        let playerBalance = 10000; // **修改點**: 初始本金改為 10000
+        let playerBalance = 10000;
         let currentBets = {};
         let isThrowing = false;
 
@@ -252,22 +252,19 @@
             if (clearBetsButton) clearBetsButton.disabled = isLocked || Object.keys(currentBets).length === 0;
         }
         
-        // **修改點**: 新增一個只重置 UI 的函數
         function resetBetState() {
             currentBets = {};
             betButtons.forEach(btn => updateBetChip(btn, 0));
-            clearBetsButton.disabled = true;
+            if (clearBetsButton) clearBetsButton.disabled = true;
         }
         
-        // **修改點**: handleClearBets 現在專門處理退款
         function handleClearBets() {
             if(isThrowing) return;
             const totalBetToRefund = Object.values(currentBets).reduce((sum, amount) => sum + amount, 0);
             playerBalance += totalBetToRefund;
             updateBalanceDisplay();
-            resetBetState(); // 只重置狀態，不再重複加錢
+            resetBetState();
         }
-
 
         function handleConfigFile(event) {
             const file = event.target.files[0];
@@ -276,10 +273,17 @@
             reader.onload = (e) => {
                 try {
                     gameConfig = JSON.parse(e.target.result);
-                    statusEl.textContent = '設定檔載入成功！';
-                    subStatusEl.textContent = '請點擊下方按鈕押注';
-                    resultDetailsEl.textContent = `每注 ${BET_AMOUNT_PER_CLICK} 元`;
-                    throwButton.disabled = false;
+                    if (gameConfig.simulation_settings && typeof gameConfig.simulation_settings.bonus_trigger_chance !== 'undefined') {
+                       statusEl.textContent = '設定檔載入成功！';
+                       subStatusEl.textContent = '請點擊下方按鈕押注';
+                       resultDetailsEl.textContent = `每注 ${BET_AMOUNT_PER_CLICK} 元`;
+                       throwButton.disabled = false;
+                    } else {
+                       statusEl.textContent = '設定檔缺少參數！';
+                       subStatusEl.textContent = '請檢查 bonus_trigger_chance';
+                       gameConfig = null;
+                       throwButton.disabled = true;
+                    }
                 } catch (error) {
                     statusEl.textContent = 'JSON 檔案錯誤！';
                     throwButton.disabled = true;
@@ -312,12 +316,19 @@
 
             const totalBet = Object.values(currentBets).reduce((sum, amount) => sum + amount, 0);
             statusEl.textContent = '投擲中...';
-            subStatusEl.textContent = totalBet > 0 ? `總押注: ${totalBet.toLocaleString()}` : '觀看開獎';
+            subStatusEl.textContent = '';
             resultDetailsEl.textContent = '';
             
             clearBonusesFromGrid();
-            generateBonusData();
-            displayBonusesOnGrid();
+            
+            const triggerChance = gameConfig.simulation_settings.bonus_trigger_chance;
+            if (Math.random() < triggerChance) {
+                subStatusEl.textContent = '幸運加成觸發！';
+                generateBonusData();
+                displayBonusesOnGrid();
+            } else {
+                currentBonuses = {}; 
+            }
             
             const landingIndices = getUniqueRandomIndices(3, TOTAL_CELLS);
             balls.forEach(ball => ball.classList.add('throwing'));
@@ -341,7 +352,6 @@
             if (gameConfig) {
                throwButton.disabled = false;
             }
-            // **修改點**: 呼叫只重置 UI 的函數，不再退款
             resetBetState();
             subStatusEl.textContent = '請點擊下方按鈕重新押注';
         }
