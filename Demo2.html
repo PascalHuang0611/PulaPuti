@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pula Puti 遊戲 DEMO (含押注系統)</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+
+        :root {
+            --pula-color: #c0392b;
+            --puti-color: #ecf0f1;
+            --highlight-color: #f1c40f;
+            --board-border: #bdc3c7;
+            --bg-color: #2c3e50;
+            --text-color: #ecf0f1;
+            --cell-size: 60px;
+            --ball-size: 40px;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .main-container {
+            display: flex;
+            gap: 30px;
+            padding: 20px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            background-color: rgba(0,0,0,0.2);
+            padding: 20px;
+            border-radius: 15px;
+            width: 250px;
+            flex-shrink: 0;
+        }
+
+        .balance-display { text-align: center; }
+        .balance-display h2 { margin: 0 0 5px 0; color: var(--highlight-color); }
+        #playerBalance { font-size: 28px; font-weight: bold; }
+
+        .game-button {
+            width: 100%;
+            padding: 12px 25px;
+            font-size: 18px;
+            font-family: 'Noto Sans TC', sans-serif;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            border-radius: 10px;
+            color: white;
+            box-shadow: 0 5px #666;
+            transition: all 0.1s ease-in-out;
+            box-sizing: border-box;
+        }
+        .game-button:active { transform: translateY(3px); box-shadow: 0 2px #666; }
+        .game-button:disabled {
+            background-color: #7f8c8d !important;
+            box-shadow: 0 5px #616a6b !important;
+            cursor: not-allowed;
+        }
+
+        #throwButton { background-color: #27ae60; box-shadow: 0 5px #1e8449; }
+        #clearBetsButton { background-color: #e67e22; box-shadow: 0 5px #d35400; }
+        #configLabel { background-color: #2980b9; box-shadow: 0 5px #20638f; text-align:center; }
+        #configFile { display: none; }
+
+        .game-area { display: flex; flex-direction: column; align-items: center; gap: 15px; }
+        
+        #game-board {
+            position: relative;
+            width: calc(var(--cell-size) * 6);
+            height: calc(var(--cell-size) * 6);
+            border: 10px solid var(--board-border);
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5), inset 0 0 15px rgba(0,0,0,0.5);
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            grid-template-rows: repeat(6, 1fr);
+        }
+
+        .grid-cell {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .grid-cell.pula { background-color: var(--pula-color); }
+        .grid-cell.puti { background-color: var(--puti-color); }
+        .grid-cell.highlight { border: 4px solid var(--highlight-color); box-sizing: border-box; }
+        
+        .bola {
+            position: absolute;
+            width: var(--ball-size);
+            height: var(--ball-size);
+            background: radial-gradient(circle at 30% 30%, #5dade2, #2980b9);
+            border-radius: 50%;
+            box-shadow: 3px 3px 5px rgba(0,0,0,0.5);
+            transition: top 0.5s ease-out, left 0.5s ease-out;
+            z-index: 10;
+        }
+        
+        .grid-bonus-multiplier {
+            position: absolute;
+            font-size: 20px;
+            font-weight: bold;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 2px 6px;
+            border-radius: 5px;
+            border: 2px solid var(--highlight-color);
+            z-index: 15;
+            animation: pop-in 0.3s ease;
+        }
+        @keyframes pop-in { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .bola.throwing { animation: roll 1.5s ease-in-out; z-index: 20; }
+        @keyframes roll { 0% {transform: scale(1.2) rotate(0deg);} 50% {transform: scale(1.5) rotate(360deg);} 100% {transform: scale(1.2) rotate(720deg);} }
+
+        #controls { text-align: center; }
+        #status { font-size: 24px; font-weight: bold; height: 30px; line-height:30px; text-shadow: 2px 2px 4px #000; }
+        #sub-status { font-size: 16px; color: #ccc; height: 20px; line-height: 20px;}
+        #result-details { font-size: 16px; min-height: 25px; color: #f1c40f; font-weight: bold;}
+        
+        #betting-panel { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; width: 100%; }
+
+        .bet-button {
+            position: relative;
+            padding: 25px 15px 15px 15px;
+            font-size: 18px;
+            border-radius: 8px;
+            background-color: #34495e;
+            color: white;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        .bet-button:hover { background-color: #4a657e; }
+        .bet-button.has-bet { border-color: #f1c40f; }
+        .bet-button:disabled { background-color: #7f8c8d; cursor: not-allowed; }
+        
+        .bet-chip {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #f39c12;
+            color: #2c3e50;
+            font-size: 14px;
+            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 15px;
+            border: 2px solid white;
+            min-width: 40px;
+            text-align: center;
+            box-shadow: 0 3px 5px rgba(0,0,0,0.3);
+            display: none;
+        }
+        .bet-button.has-bet .bet-chip { display: block; }
+
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="left-panel">
+            <div class="balance-display">
+                <h2>玩家餘額</h2>
+                <span id="playerBalance"></span>
+            </div>
+            <label for="configFile" id="configLabel" class="game-button">載入設定檔</label>
+            <input type="file" id="configFile" accept=".json">
+            <button id="throwButton" class="game-button" disabled>投擲！</button>
+            <button id="clearBetsButton" class="game-button" disabled>清除押注</button>
+        </div>
+        
+        <div class="game-area">
+            <div id="controls">
+                <div id="status">請先載入設定檔</div>
+                <div id="sub-status"></div>
+                <div id="result-details"></div>
+            </div>
+            <div id="game-board"></div>
+            <div id="betting-panel">
+                <button class="bet-button" data-bet="紅勝">紅勝<span class="bet-chip"></span></button>
+                <button class="bet-button" data-bet="白勝">白勝<span class="bet-chip"></span></button>
+                <button class="bet-button" data-bet="三紅勝">三紅勝<span class="bet-chip"></span></button>
+                <button class="bet-button" data-bet="三白勝">三白勝<span class="bet-chip"></span></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 全域 DOM 元素 ---
+        let throwButton, clearBetsButton, statusEl, subStatusEl, resultDetailsEl, 
+            boardEl, configFileEl, playerBalanceEl, betButtons;
+
+        // --- 全域遊戲常數 ---
+        const BET_AMOUNT_PER_CLICK = 100;
+        const TOTAL_CELLS = 36;
+        const COLS = 6;
+        const HIGHLIGHT_COORDS = [[1, 1], [1, 4], [4, 1], [4, 4]];
+        const CELL_SIZE = 60;
+        const BALL_SIZE = 40;
+
+        // --- 全域遊戲狀態變數 ---
+        let gameConfig = null;
+        let balls = [];
+        let currentBonuses = {};
+        let playerBalance = 10000;
+        let currentBets = {};
+        let isThrowing = false;
+
+        // --- 函數定義 ---
+        
+        function updateBalanceDisplay() {
+            if (playerBalanceEl) playerBalanceEl.textContent = playerBalance.toLocaleString();
+        }
+
+        function updateBetChip(button, amount) {
+            const chip = button.querySelector('.bet-chip');
+            if (chip) {
+                if (amount > 0) {
+                    chip.textContent = amount.toLocaleString();
+                    button.classList.add('has-bet');
+                } else {
+                    chip.textContent = '';
+                    button.classList.remove('has-bet');
+                }
+            }
+        }
+
+        function setControlsState(isLocked) {
+            if (throwButton) throwButton.disabled = isLocked;
+            if (betButtons) betButtons.forEach(btn => btn.disabled = isLocked);
+            if (clearBetsButton) clearBetsButton.disabled = isLocked || Object.keys(currentBets).length === 0;
+        }
+        
+        function resetBetState() {
+            currentBets = {};
+            betButtons.forEach(btn => updateBetChip(btn, 0));
+            if (clearBetsButton) clearBetsButton.disabled = true;
+        }
+        
+        function handleClearBets() {
+            if(isThrowing) return;
+            const totalBetToRefund = Object.values(currentBets).reduce((sum, amount) => sum + amount, 0);
+            playerBalance += totalBetToRefund;
+            updateBalanceDisplay();
+            resetBetState();
+        }
+
+        function handleConfigFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    gameConfig = JSON.parse(e.target.result);
+                    if (gameConfig.simulation_settings && typeof gameConfig.simulation_settings.bonus_trigger_chance !== 'undefined') {
+                       statusEl.textContent = '設定檔載入成功！';
+                       subStatusEl.textContent = '請點擊下方按鈕押注';
+                       resultDetailsEl.textContent = `每注 ${BET_AMOUNT_PER_CLICK} 元`;
+                       throwButton.disabled = false;
+                    } else {
+                       statusEl.textContent = '設定檔缺少參數！';
+                       subStatusEl.textContent = '請檢查 bonus_trigger_chance';
+                       gameConfig = null;
+                       throwButton.disabled = true;
+                    }
+                } catch (error) {
+                    statusEl.textContent = 'JSON 檔案錯誤！';
+                    throwButton.disabled = true;
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function handleBetting(event) {
+            if (isThrowing || !gameConfig) return;
+            const button = event.currentTarget;
+            const betType = button.dataset.bet;
+
+            if (playerBalance >= BET_AMOUNT_PER_CLICK) {
+                playerBalance -= BET_AMOUNT_PER_CLICK;
+                currentBets[betType] = (currentBets[betType] || 0) + BET_AMOUNT_PER_CLICK;
+                updateBalanceDisplay();
+                updateBetChip(button, currentBets[betType]);
+                clearBetsButton.disabled = false;
+            } else {
+                subStatusEl.textContent = '餘額不足！';
+            }
+        }
+
+        function handleThrow() {
+            if (isThrowing || !gameConfig) return;
+            
+            isThrowing = true;
+            setControlsState(true);
+
+            const totalBet = Object.values(currentBets).reduce((sum, amount) => sum + amount, 0);
+            statusEl.textContent = '投擲中...';
+            subStatusEl.textContent = '';
+            resultDetailsEl.textContent = '';
+            
+            clearBonusesFromGrid();
+            
+            const triggerChance = gameConfig.simulation_settings.bonus_trigger_chance;
+            if (Math.random() < triggerChance) {
+                subStatusEl.textContent = '幸運加成觸發！';
+                generateBonusData();
+                displayBonusesOnGrid();
+            } else {
+                currentBonuses = {}; 
+            }
+            
+            const landingIndices = getUniqueRandomIndices(3, TOTAL_CELLS);
+            balls.forEach(ball => ball.classList.add('throwing'));
+            
+            setTimeout(() => {
+                balls.forEach(ball => ball.classList.remove('throwing'));
+                processGameResult(landingIndices);
+            }, 1500);
+        }
+
+        function processGameResult(landingIndices) {
+            const resultData = calculateResult(landingIndices);
+            const actualWinModes = getActualWinModes(resultData.counts, resultData.isJP);
+            
+            statusEl.textContent = `開獎結果: ${actualWinModes.text}`;
+            moveBallsToPosition(landingIndices);
+            calculateAndDisplayWinnings(actualWinModes.modes, resultData.bonusAddOn, resultData.individualBonuses);
+
+            isThrowing = false;
+            setControlsState(false);
+            if (gameConfig) {
+               throwButton.disabled = false;
+            }
+            resetBetState();
+            subStatusEl.textContent = '請點擊下方按鈕重新押注';
+        }
+
+        function calculateResult(landingIndices) {
+            const counts = { pula: 0, puti: 0 };
+            const isHighlightList = [];
+            let bonusAddOn = 0;
+            let individualBonuses = [];
+            
+            landingIndices.forEach(index => {
+                const row = Math.floor(index / COLS);
+                const col = index % COLS;
+                counts[(row + col) % 2 === 0 ? 'puti' : 'pula']++;
+                isHighlightList.push(HIGHLIGHT_COORDS.some(pos => pos[0] === row && pos[1] === col));
+                
+                if (currentBonuses[index]) {
+                    const bonusValue = currentBonuses[index];
+                    bonusAddOn += bonusValue;
+                    individualBonuses.push(bonusValue);
+                }
+            });
+            return {
+                counts,
+                isJP: isHighlightList.every(h => h),
+                bonusAddOn,
+                individualBonuses,
+            };
+        }
+
+        function getActualWinModes(counts, isJP) {
+            if (isJP) return { modes: ["JP"], text: "JP!" };
+            if (counts.pula === 3) return { modes: ["三紅勝", "紅勝"], text: "三紅勝" };
+            if (counts.puti === 3) return { modes: ["三白勝", "白勝"], text: "三白勝" };
+            if (counts.pula > counts.puti) return { modes: ["紅勝"], text: "紅勝" };
+            return { modes: ["白勝"], text: "白勝" };
+        }
+
+        function calculateAndDisplayWinnings(actualWinModes, bonusAddOn, individualBonuses) {
+            let totalWinnings = 0;
+            let winDetails = [];
+
+            for (const betType in currentBets) {
+                if (actualWinModes.includes(betType)) {
+                    const betAmount = currentBets[betType];
+                    const baseOdds = gameConfig.base_odds[betType] || 0;
+                    
+                    const baseWin = betAmount * baseOdds;
+                    let bonusWinDetail = '';
+                    if(bonusAddOn > 0 && individualBonuses && individualBonuses.length > 0) {
+                        const bonusBreakdown = individualBonuses.map(b => betAmount * b).join(' + ');
+                        bonusWinDetail = ` + ${bonusBreakdown} (加成)`;
+                    }
+                    const totalRoundWin = baseWin + (betAmount * bonusAddOn);
+                    totalWinnings += totalRoundWin;
+                    
+                    winDetails.push(
+                        `${betType} 贏得: ${baseWin.toLocaleString()} (基本)${bonusWinDetail} = ${totalRoundWin.toLocaleString()}元`
+                    );
+                }
+            }
+
+            if (totalWinnings > 0) {
+                playerBalance += totalWinnings;
+                resultDetailsEl.innerHTML = winDetails.join('<br>');
+            } else {
+                const totalBet = Object.values(currentBets).reduce((sum, amount) => sum + amount, 0);
+                resultDetailsEl.textContent = totalBet > 0 ? `再接再厲！` : `未押注，僅顯示開獎結果`;
+            }
+            updateBalanceDisplay();
+        }
+
+        function moveBallsToPosition(landingIndices) {
+            landingIndices.forEach((landingIndex, i) => {
+                const row = Math.floor(landingIndex / COLS);
+                const col = landingIndex % COLS;
+                const cellTop = row * CELL_SIZE;
+                const cellLeft = col * CELL_SIZE;
+                const randomTop = cellTop + Math.random() * (CELL_SIZE - BALL_SIZE);
+                const randomLeft = cellLeft + Math.random() * (CELL_SIZE - BALL_SIZE);
+                balls[i].style.top = `${randomTop}px`;
+                balls[i].style.left = `${randomLeft}px`;
+            });
+        }
+        
+        function createBoard() {
+            boardEl.innerHTML = '';
+            for (let i = 0; i < TOTAL_CELLS; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('grid-cell');
+                const row = Math.floor(i / COLS);
+                const col = i % COLS;
+                cell.classList.add((row + col) % 2 === 0 ? 'puti' : 'pula');
+                if (HIGHLIGHT_COORDS.some(pos => pos[0] === row && pos[1] === col)) {
+                    cell.classList.add('highlight');
+                }
+                boardEl.appendChild(cell);
+            }
+        }
+        
+        function setupAndResetBalls() {
+            balls.forEach(ball => ball.remove());
+            balls = [];
+            for(let i = 0; i < 3; i++) {
+                const ball = document.createElement('div');
+                ball.id = `ball${i+1}`;
+                ball.className = 'bola';
+                boardEl.appendChild(ball);
+                balls.push(ball);
+            }
+            balls.forEach((ball, index) => {
+                ball.style.top = `calc(50% - ${BALL_SIZE / 2}px)`;
+                ball.style.left = `calc(50% - ${BALL_SIZE / 2}px + ${(index - 1) * (BALL_SIZE + 10)}px)`;
+            });
+        }
+        
+        function clearBonusesFromGrid() {
+            document.querySelectorAll('.grid-bonus-multiplier').forEach(el => el.remove());
+        }
+        
+        function displayBonusesOnGrid() {
+            for (const index in currentBonuses) {
+                const multiplier = currentBonuses[index];
+                const cell = boardEl.children[parseInt(index)];
+                if (cell) {
+                    const bonusEl = document.createElement('div');
+                    bonusEl.className = 'grid-bonus-multiplier';
+                    bonusEl.textContent = `x${multiplier}`;
+                    cell.appendChild(bonusEl);
+                }
+            }
+        }
+        
+        function generateBonusData() {
+            if (!gameConfig) return;
+            const numBonusCells = parseInt(weightedChoice(gameConfig.cell_count_weights));
+            const bonusIndices = getUniqueRandomIndices(numBonusCells, TOTAL_CELLS);
+            currentBonuses = {};
+            bonusIndices.forEach(index => {
+                const multiplier = parseInt(weightedChoice(gameConfig.multiplier_value_weights));
+                currentBonuses[index] = multiplier;
+            });
+        }
+        
+        function weightedChoice(choicesWithWeights) {
+            const population = Object.keys(choicesWithWeights);
+            const weights = Object.values(choicesWithWeights);
+            const cumulativeWeights = [];
+            let total = 0;
+            for (const weight of weights) {
+                total += weight;
+                cumulativeWeights.push(total);
+            }
+            const rand = Math.random() * total;
+            const index = cumulativeWeights.findIndex(cw => rand < cw);
+            return population[index];
+        }
+        
+        function getUniqueRandomIndices(count, max) {
+            const indices = new Set();
+            while (indices.size < count) {
+                indices.add(Math.floor(Math.random() * max));
+            }
+            return Array.from(indices);
+        }
+
+        function initializeApp() {
+            // DOM 元素賦值
+            throwButton = document.getElementById('throwButton');
+            clearBetsButton = document.getElementById('clearBetsButton');
+            statusEl = document.getElementById('status');
+            subStatusEl = document.getElementById('sub-status');
+            resultDetailsEl = document.getElementById('result-details');
+            boardEl = document.getElementById('game-board');
+            configFileEl = document.getElementById('configFile');
+            playerBalanceEl = document.getElementById('playerBalance');
+            betButtons = document.querySelectorAll('.bet-button');
+
+            // 事件監聽器綁定
+            configFileEl.addEventListener('change', handleConfigFile);
+            betButtons.forEach(button => button.addEventListener('click', handleBetting));
+            clearBetsButton.addEventListener('click', handleClearBets);
+            throwButton.addEventListener('click', handleThrow);
+            
+            initializeGame();
+        }
+
+        function initializeGame() {
+            updateBalanceDisplay();
+            createBoard();
+            setupAndResetBalls();
+            resetBetState();
+        }
+
+        // --- 啟動點 ---
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+    </script>
+</body>
+</html>
