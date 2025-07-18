@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pula Puti 逐局互動模擬器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+        }
+        /* 球動畫效果 */
+        .ball-animation {
+            animation: drop-in 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55) forwards;
+            transform: scale(0.5);
+            opacity: 0;
+        }
+        @keyframes drop-in {
+            0% {
+                transform: scale(0.5) translateY(-50px);
+                opacity: 0;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+        /* 特殊JP格的閃爍效果 */
+        .jp-cell {
+            position: relative;
+            overflow: hidden;
+        }
+        .jp-cell::before {
+            content: 'JP';
+            position: absolute;
+            top: 2px;
+            left: 4px; /* 修改: 移到左上角 */
+            font-size: 0.6rem;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 0 2px black;
+            z-index: 10;
+        }
+        .jp-cell::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: conic-gradient(
+                transparent,
+                rgba(255, 215, 0, 0.5),
+                transparent 30%
+            );
+            animation: rotate 4s linear infinite;
+        }
+        @keyframes rotate {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+        /* 按鈕禁用時的樣式 */
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        /* 新增: 格子計數器樣式 */
+        .cell-counter {
+            position: absolute;
+            top: 2px;
+            right: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.4);
+            padding: 0 4px;
+            border-radius: 4px;
+            line-height: 1.2;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-6xl">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">Pula Puti 互動模擬器</h1>
+            <p class="text-lg text-gray-600 mt-2">Round-by-Round Interactive Simulator</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- 左側: 遊戲盤面與控制 -->
+            <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg">
+                <h2 class="text-2xl font-bold mb-4 text-center">遊戲盤面</h2>
+                <div id="game-board" class="grid grid-cols-6 gap-2 aspect-square max-w-lg mx-auto mb-6">
+                    <!-- 遊戲格將由 JavaScript 動態生成 -->
+                </div>
+                <div class="text-center flex justify-center items-center gap-4">
+                    <button id="next-round-btn" class="bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-indigo-700 transition-all duration-300 shadow-lg focus:outline-none focus:ring-4 focus:ring-indigo-300 text-xl">
+                        進行下一局
+                    </button>
+                    <button id="auto-run-btn" class="bg-green-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-green-700 transition-all duration-300 shadow-lg focus:outline-none focus:ring-4 focus:ring-green-300 text-xl">
+                        自動進行
+                    </button>
+                </div>
+            </div>
+
+            <!-- 右側: 統計與歷史紀錄 -->
+            <div class="space-y-8">
+                <!-- 即時統計 -->
+                <div class="bg-white p-6 rounded-2xl shadow-lg">
+                    <h2 class="text-2xl font-bold mb-4 border-b pb-2">即時統計</h2>
+                    <div id="stats-display" class="space-y-3 text-lg">
+                        <p class="font-semibold">總局數: <span id="total-rounds" class="text-indigo-600">0</span></p>
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-2">
+                            <div>2紅1白: <span id="stats-2r1w" class="font-mono">0.00% (0)</span></div>
+                            <div>1紅2白: <span id="stats-1r2w" class="font-mono">0.00% (0)</span></div>
+                            <div>三紅: <span id="stats-3r" class="font-mono">0.00% (0)</span></div>
+                            <div>三白: <span id="stats-3w" class="font-mono">0.00% (0)</span></div>
+                        </div>
+                        <div class="mt-2 pt-2 border-t border-gray-200">
+                            <div class="text-yellow-600 font-bold">JP 命中: <span id="stats-jp" class="font-mono">0.0000% (0)</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 歷史紀錄 -->
+                <div class="bg-white p-6 rounded-2xl shadow-lg">
+                    <h2 class="text-2xl font-bold mb-4 border-b pb-2">歷史紀錄</h2>
+                    <ul id="history-list" class="space-y-2 h-96 overflow-y-auto pr-2">
+                        <li class="text-gray-500 text-center pt-8">尚無歷史紀錄</li>
+                    </ul>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- 遊戲設定 (來自 config.json) ---
+        const CONFIG = {
+            landing_cell_weights: {
+                "1": 10, "2": 10, "3": 10, "4": 10, "5": 10, "6": 10,
+                "7": 10, "8": 1, "9": 10, "10": 10, "11": 1, "12": 10,
+                "13": 10, "14": 10, "15": 10, "16": 10, "17": 10, "18": 10,
+                "19": 10, "20": 10, "21": 10, "22": 10, "23": 10, "24": 10,
+                "25": 10, "26": 1, "27": 10, "28": 10, "29": 1, "30": 10,
+                "31": 10, "32": 10, "33": 10, "34": 10, "35": 10, "36": 10
+            }
+        };
+
+        // --- DOM 元素 ---
+        const gameBoard = document.getElementById('game-board');
+        const nextRoundBtn = document.getElementById('next-round-btn');
+        const autoRunBtn = document.getElementById('auto-run-btn');
+        const totalRoundsEl = document.getElementById('total-rounds');
+        const stats2r1wEl = document.getElementById('stats-2r1w');
+        const stats1r2wEl = document.getElementById('stats-1r2w');
+        const stats3rEl = document.getElementById('stats-3r');
+        const stats3wEl = document.getElementById('stats-3w');
+        const statsJpEl = document.getElementById('stats-jp');
+        const historyList = document.getElementById('history-list');
+
+        // --- 遊戲狀態 ---
+        let boardData = [];
+        let history = []; 
+        let totalRoundsPlayed = 0;
+        let statsCounter = {
+            "2_red_1_white": 0,
+            "1_red_2_white": 0,
+            "triple_red": 0,
+            "triple_white": 0,
+            "jp_win": 0 // 新增 JP 計數器
+        };
+        let cellHitCounter = {};
+        let isAutoRunning = false;
+        let autoRunIntervalId = null;
+
+        // --- 核心邏輯函式 ---
+
+        function initializeBoard() {
+            const cells = [];
+            const specialIds = new Set([8, 11, 26, 29]);
+            for (let i = 1; i <= 36; i++) {
+                const row = Math.floor((i - 1) / 6);
+                const col = (i - 1) % 6;
+                const color = (row + col) % 2 === 0 ? '紅' : '白';
+                cells.push({ id: i, color: color, isSpecial: specialIds.has(i) });
+            }
+            return cells;
+        }
+
+        function weightedSampleWithoutReplacement(populationWithWeights, k = 3) {
+            let population = Object.keys(populationWithWeights);
+            let weights = Object.values(populationWithWeights);
+            
+            if (population.length < k) {
+                throw new Error("Cannot sample more items than exist in the population.");
+            }
+
+            const result = [];
+            for (let i = 0; i < k; i++) {
+                let cumulativeWeight = 0;
+                const randomNum = Math.random() * weights.reduce((a, b) => a + b, 0);
+                let chosenIndex = -1;
+
+                for (let j = 0; j < population.length; j++) {
+                    cumulativeWeight += weights[j];
+                    if (randomNum < cumulativeWeight) {
+                        chosenIndex = j;
+                        break;
+                    }
+                }
+                
+                const chosenItem = population[chosenIndex];
+                result.push(chosenItem);
+                population.splice(chosenIndex, 1);
+                weights.splice(chosenIndex, 1);
+            }
+            return result;
+        }
+
+        function runOneRound(landingWeights, boardDict) {
+            const chosenCellIds = weightedSampleWithoutReplacement(landingWeights, 3);
+            const balls = chosenCellIds.map(id => boardDict[id]);
+
+            const redCount = balls.filter(ball => ball.color === '紅').length;
+
+            let winText, statsKey;
+            if (redCount === 3) {
+                winText = "三紅勝";
+                statsKey = "triple_red";
+            } else if (redCount === 0) {
+                winText = "三白勝";
+                statsKey = "triple_white";
+            } else if (redCount > 1) {
+                winText = "紅勝";
+                statsKey = "2_red_1_white";
+            } else {
+                winText = "白勝";
+                statsKey = "1_red_2_white";
+            }
+            
+            // 新增: 檢查是否命中JP
+            const isJp = balls.every(ball => ball.isSpecial);
+
+            return {
+                chosenIds: chosenCellIds.map(Number).sort((a, b) => a - b),
+                winText,
+                statsKey,
+                isJp: isJp // 在回傳結果中加入JP旗標
+            };
+        }
+
+        // --- UI 更新函式 ---
+
+        function renderBoard() {
+            gameBoard.innerHTML = '';
+            boardData.forEach(cell => {
+                const cellEl = document.createElement('div');
+                cellEl.id = `cell-${cell.id}`;
+                cellEl.className = `relative flex items-center justify-center aspect-square rounded-lg text-white font-bold text-xl shadow-inner transition-transform duration-300`;
+                
+                if (cell.color === '紅') {
+                    cellEl.classList.add('bg-red-500');
+                } else {
+                    cellEl.classList.add('bg-gray-600');
+                }
+                
+                if (cell.isSpecial) {
+                    cellEl.classList.add('jp-cell');
+                }
+                
+                const mainIdEl = document.createElement('span');
+                mainIdEl.textContent = cell.id;
+                cellEl.appendChild(mainIdEl);
+                
+                const counterEl = document.createElement('span');
+                counterEl.id = `counter-${cell.id}`;
+                counterEl.className = 'cell-counter';
+                counterEl.textContent = cellHitCounter[cell.id];
+                cellEl.appendChild(counterEl);
+
+                gameBoard.appendChild(cellEl);
+            });
+        }
+
+        function updateDashboard() {
+            const totalRounds = totalRoundsPlayed;
+            
+            totalRoundsEl.textContent = totalRounds;
+            if (totalRounds > 0) {
+                const p2r1w = statsCounter["2_red_1_white"] / totalRounds;
+                const p1r2w = statsCounter["1_red_2_white"] / totalRounds;
+                const p3r = statsCounter["triple_red"] / totalRounds;
+                const p3w = statsCounter["triple_white"] / totalRounds;
+                const pJp = statsCounter["jp_win"] / totalRounds;
+
+                stats2r1wEl.textContent = `${(p2r1w * 100).toFixed(2)}% (${statsCounter["2_red_1_white"]})`;
+                stats1r2wEl.textContent = `${(p1r2w * 100).toFixed(2)}% (${statsCounter["1_red_2_white"]})`;
+                stats3rEl.textContent = `${(p3r * 100).toFixed(2)}% (${statsCounter["triple_red"]})`;
+                stats3wEl.textContent = `${(p3w * 100).toFixed(2)}% (${statsCounter["triple_white"]})`;
+                statsJpEl.textContent = `${(pJp * 100).toFixed(4)}% (${statsCounter["jp_win"]})`;
+            }
+
+            historyList.innerHTML = '';
+            if (history.length === 0) {
+                historyList.innerHTML = '<li class="text-gray-500 text-center pt-8">尚無歷史紀錄</li>';
+            } else {
+                history.forEach((result, index) => {
+                    const li = document.createElement('li');
+                    const roundNum = totalRoundsPlayed - index;
+                    const idStr = result.chosenIds.join(', ');
+                    
+                    let winColorClass = '';
+                    if (result.winText.includes('紅')) winColorClass = 'text-red-600';
+                    if (result.winText.includes('白')) winColorClass = 'text-gray-700';
+
+                    // 新增: 產生JP徽章
+                    const jpBadge = result.isJp 
+                        ? '<span class="ml-2 px-2 py-0.5 text-xs font-bold text-black bg-yellow-400 rounded-full shadow">JP!</span>' 
+                        : '';
+
+                    li.className = 'p-2 rounded-md transition-colors duration-200';
+                    if (index === 0) li.classList.add('bg-indigo-100');
+                    if (result.isJp) li.classList.add('bg-yellow-200', 'border-2', 'border-yellow-400'); // 高亮JP紀錄
+
+                    li.innerHTML = `
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="font-bold text-gray-500">第 ${roundNum} 局</span>
+                            <span class="font-mono text-xs">${idStr}</span>
+                            <span class="font-semibold ${winColorClass}">${result.winText}${jpBadge}</span>
+                        </div>
+                    `;
+                    historyList.appendChild(li);
+                });
+            }
+        }
+        
+        function handleNextRound() {
+            document.querySelectorAll('.ball-animation').forEach(el => el.classList.remove('ball-animation'));
+            document.querySelectorAll('.scale-125').forEach(el => el.classList.remove('scale-125', 'shadow-2xl', 'z-10'));
+
+            const boardDict = Object.fromEntries(boardData.map(cell => [cell.id, cell]));
+            const result = runOneRound(CONFIG.landing_cell_weights, boardDict);
+
+            totalRoundsPlayed++;
+            history.unshift(result);
+            if (history.length > 100) history.pop();
+            statsCounter[result.statsKey]++;
+            if (result.isJp) { // 新增: 如果是JP，則JP計數器+1
+                statsCounter.jp_win++;
+            }
+
+            result.chosenIds.forEach(id => {
+                cellHitCounter[id]++;
+                const counterEl = document.getElementById(`counter-${id}`);
+                if (counterEl) {
+                    counterEl.textContent = cellHitCounter[id];
+                }
+            });
+
+            updateDashboard();
+
+            result.chosenIds.forEach((id, index) => {
+                const cellEl = document.getElementById(`cell-${id}`);
+                if (cellEl) {
+                    setTimeout(() => {
+                        cellEl.classList.add('ball-animation', 'scale-125', 'shadow-2xl', 'z-10');
+                    }, index * 100);
+                }
+            });
+        }
+
+        function toggleAutoRun() {
+            isAutoRunning = !isAutoRunning;
+            if (isAutoRunning) {
+                autoRunBtn.textContent = '停止自動';
+                autoRunBtn.classList.replace('bg-green-600', 'bg-red-600');
+                autoRunBtn.classList.replace('hover:bg-green-700', 'hover:bg-red-700');
+                autoRunBtn.classList.replace('focus:ring-green-300', 'focus:ring-red-300');
+                
+                nextRoundBtn.disabled = true;
+                autoRunIntervalId = setInterval(handleNextRound, 200);
+            } else {
+                autoRunBtn.textContent = '自動進行';
+                autoRunBtn.classList.replace('bg-red-600', 'bg-green-600');
+                autoRunBtn.classList.replace('hover:bg-red-700', 'hover:bg-green-700');
+                autoRunBtn.classList.replace('focus:ring-red-300', 'focus:ring-green-300');
+
+                nextRoundBtn.disabled = false;
+                clearInterval(autoRunIntervalId);
+                autoRunIntervalId = null;
+            }
+        }
+
+        // --- 初始化 ---
+        function init() {
+            boardData = initializeBoard();
+            for (let i = 1; i <= 36; i++) {
+                cellHitCounter[i] = 0;
+            }
+            renderBoard();
+            updateDashboard();
+            nextRoundBtn.addEventListener('click', handleNextRound);
+            autoRunBtn.addEventListener('click', toggleAutoRun);
+        }
+
+        // 啟動應用程式
+        init();
+
+    </script>
+</body>
+</html>
