@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>動態數字動畫</title>
+    <style>
+        /* --- CSS 樣式 --- */
+        :root {
+            --primary-color: #28a745;
+            --background-color: #f0f2f5;
+            --text-color: #333;
+            --container-bg: #ffffff;
+            --code-bg: #2d2d2d;
+            --code-text: #f4f4f4;
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--background-color);
+        }
+        
+        .main-layout {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .container {
+            text-align: center;
+            padding: 40px;
+            background-color: var(--container-bg);
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 400px;
+            flex-shrink: 0;
+        }
+
+        #number-display {
+            font-size: 5rem;
+            font-weight: 700;
+            color: var(--text-color);
+            margin-bottom: 20px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+        
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            color: #555;
+        }
+        
+        .slider-label {
+             font-size: 0.9rem;
+        }
+
+        #speed-slider {
+            width: 180px;
+        }
+
+        #target-input {
+            padding: 10px 15px;
+            font-size: 1rem;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            width: 150px;
+            text-align: center;
+            transition: border-color 0.3s;
+        }
+
+        #target-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        #start-button {
+            padding: 10px 20px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #fff;
+            background-color: var(--primary-color);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+
+        #start-button:hover {
+            background-color: #218838;
+        }
+
+        #start-button:active {
+            transform: scale(0.98);
+        }
+        
+        /* --- 新增的程式碼說明區塊樣式 --- */
+        .explanation-container {
+            padding: 20px;
+            background-color: var(--container-bg);
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 500px;
+            flex-grow: 1;
+        }
+        
+        .explanation-container h2 {
+            margin-top: 0;
+            color: var(--primary-color);
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        
+        pre {
+            background-color: var(--code-bg);
+            color: var(--code-text);
+            padding: 15px;
+            border-radius: 8px;
+            white-space: pre-wrap; /* 自動換行 */
+            word-wrap: break-word;
+            font-size: 0.9em;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="main-layout">
+    <!-- --- HTML 結構 --- -->
+    <div class="container">
+        <h1 id="number-display">0</h1>
+        <div class="controls">
+            <input type="number" id="target-input" placeholder="輸入目標數字">
+            <button id="start-button">開始</button>
+        </div>
+        <div class="slider-container">
+            <label for="speed-slider" class="slider-label">平滑係數: <span id="speed-value">0.1</span></label>
+            <input type="range" id="speed-slider" min="0.01" max="0.5" step="0.01" value="0.1">
+        </div>
+    </div>
+    
+    <!-- --- 程式碼說明區塊 --- -->
+    <div class="explanation-container">
+        <h2>核心邏輯說明</h2>
+        
+        <h3>偽代碼 (Pseudocode)</h3>
+        <pre><code>FUNCTION startAnimation(目標值):
+  停止任何正在運行的動畫
+
+  取得 目前顯示的數字
+  取得 平滑係數 (speed)
+  設定 更新間隔 (interval = 20ms)
+  設定 上次更新時間 = null
+
+  // 定義動畫的每一步要做什麼
+  FUNCTION animationStep(當前時間):
+    如果 上次更新時間 是 null, 則設定 上次更新時間 = 當前時間
+
+    計算 經過時間 = 當前時間 - 上次更新時間
+    計算 剩餘距離 = 目標值 - 目前顯示的數字
+
+    如果 剩餘距離的絕對值 < 0.5 (已到達終點):
+      設定 顯示數字 = 目標值
+      結束動畫並返回
+    
+    如果 經過時間 >= 更新間隔:
+      計算 移動量 = 剩餘距離 * 平滑係數
+
+      如果 移動量的絕對值 < 1 (避免停滯):
+        移動量 = 剩餘距離的符號 (1 或 -1)
+
+      更新 目前顯示的數字 += 移動量
+      更新 畫面上的數字為四捨五入後的目前值
+
+      重設 上次更新時間 = 當前時間
+
+    請求下一幀動畫，繼續執行 animationStep
+
+  // 啟動動畫
+  啟動 animationStep
+END FUNCTION</code></pre>
+
+        <h3>TypeScript 範例</h3>
+        <pre><code>let animationFrameId: number | null = null;
+
+function startDynamicAnimation(targetValue: number): void {
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
+
+    let currentValue: number = /* 從 DOM 取得目前數字 */;
+    const speed: number = /* 從滑桿取得平滑係數 */;
+
+    let lastUpdateTime: number | null = null;
+    const interval: number = 20; // 更新間隔 (ms)
+
+    const step = (currentTime: number): void => {
+        if (lastUpdateTime === null) {
+            lastUpdateTime = currentTime;
+        }
+
+        const elapsed = currentTime - lastUpdateTime;
+        const distance = targetValue - currentValue;
+
+        if (Math.abs(distance) < 0.5) {
+            /* 更新 DOM 為最終目標值 */;
+            animationFrameId = null;
+            return;
+        }
+
+        if (elapsed >= interval) {
+            let movement = distance * speed;
+
+            if (Math.abs(movement) < 1) {
+                movement = Math.sign(distance);
+            }
+            
+            currentValue += movement;
+            /* 更新 DOM 為 Math.round(currentValue) */;
+            
+            lastUpdateTime = currentTime;
+        }
+        
+        animationFrameId = requestAnimationFrame(step);
+    };
+
+    animationFrameId = requestAnimationFrame(step);
+}</code></pre>
+    </div>
+</div>
+
+    <script>
+        // --- JavaScript 邏輯 ---
+        
+        // 1. 取得需要操作的 HTML 元素
+        const numberDisplay = document.getElementById('number-display');
+        const targetInput = document.getElementById('target-input');
+        const startButton = document.getElementById('start-button');
+        const speedSlider = document.getElementById('speed-slider');
+        const speedValueDisplay = document.getElementById('speed-value');
+
+        let animationFrameId = null; // 用來存放動畫的 ID，方便中止
+
+        // 更新滑桿數值顯示
+        speedSlider.addEventListener('input', (e) => {
+            speedValueDisplay.textContent = parseFloat(e.target.value).toFixed(2);
+        });
+
+        // 2. 核心動畫函數 (新版邏輯，增加固定時間間隔)
+        function startDynamicAnimation(targetValue) {
+            // 如果有正在執行的動畫，先取消它
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            
+            startButton.disabled = true; // 動畫期間禁用按鈕
+
+            let currentValue = parseInt(numberDisplay.textContent.replace(/,/g, ''), 10);
+            const speed = parseFloat(speedSlider.value);
+
+            let lastUpdateTime = null; // 用來記錄上次更新的時間
+            const interval = 20;       // 設定更新間隔為 20 毫秒 (0.02秒)
+
+            const step = (currentTime) => {
+                if (lastUpdateTime === null) {
+                    lastUpdateTime = currentTime;
+                }
+
+                const elapsed = currentTime - lastUpdateTime;
+
+                // 檢查是否到達終點，若到達則結束動畫
+                const distance = targetValue - currentValue;
+                if (Math.abs(distance) < 0.5) {
+                    numberDisplay.textContent = targetValue.toLocaleString();
+                    startButton.disabled = false; // 恢復按鈕
+                    animationFrameId = null;
+                    return;
+                }
+
+                // 如果距離上次更新的時間，已經超過了我們設定的間隔
+                if (elapsed >= interval) {
+                    // 計算這一次要移動的量
+                    let movement = distance * speed;
+
+                    // 【您的規則】如果變化量不足 1，但還沒到終點，則至少移動 1
+                    if (Math.abs(movement) < 1) {
+                        movement = Math.sign(distance); // Math.sign 會回傳 1 或 -1
+                    }
+                    
+                    // 更新當前數字
+                    currentValue += movement;
+
+                    // 更新畫面顯示 (四捨五入並加上千分位)
+                    numberDisplay.textContent = Math.round(currentValue).toLocaleString();
+                    
+                    // 重設上次更新的時間，為下一個間隔做準備
+                    lastUpdateTime = currentTime;
+                }
+                
+                // 繼續請求下一幀，以保持時間檢查的循環
+                animationFrameId = requestAnimationFrame(step);
+            };
+
+            // 啟動動畫循環
+            animationFrameId = requestAnimationFrame(step);
+        }
+
+        // 3. 監聽按鈕點擊事件
+        startButton.addEventListener('click', () => {
+            const endValue = parseInt(targetInput.value, 10);
+
+            if (isNaN(endValue)) {
+                alert('請輸入有效的數字！');
+                return;
+            }
+            
+            startDynamicAnimation(endValue);
+        });
+
+    </script>
+</body>
+</html>
+
